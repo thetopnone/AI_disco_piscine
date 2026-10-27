@@ -170,9 +170,10 @@ def main() -> int:
     #print(puzzle2  )
     #print(puzzle2.is_solvable)
     #solver.heuristic(puzzle2.grid_array)
-    solver.solve_puzzle(puzzle1)
+    solver.solve_puzzle(puzzle2)
     for state in solver.grid_states:
         print(state)
+    print(solver.steps)
 
     return 0
 
