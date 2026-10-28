@@ -1,14 +1,76 @@
+from __future__ import annotations
+from copy import deepcopy
 import numpy as np
 import math
 import sys
 import random
-from copy import deepcopy
 
 
+def format_grid(grid: list) -> str:
+    if grid and isinstance(grid[0], list):
+        values = [value for row in grid for value in row]
+    else:
+        values = grid
+    rows = []
+    for row in range(0, 9, 3):
+        rows.append(
+            f"[{values[row]}, {values[row + 1]}, {values[row + 2]}]"
+        )
+    return "\n".join(rows)
+
+
+class State:
+    def __init__(self, _grid: list[int], _prev_path_cost: int, _parent: State):
+        self.parents: list[State] = []
+        if _parent is not None:
+            self.parents = _parent.parents.copy()
+            self.parents.append(_parent)
+        self.grid = deepcopy(_grid)
+        self.grid_key = tuple(self.grid)
+        self.path_cost = _prev_path_cost + 1
+        self.estimated_cost = heuristic(_grid)
+        self.total_cost = self.path_cost + self.estimated_cost
+
+    def __str__(self) -> str:
+        return format_grid(self.grid)
+
+    def node_expansion(self) -> list:
+        start_index = self.grid.index(0)
+        start_pos = np.array([start_index // 3, start_index % 3])
+
+        up = start_pos[0] - 1
+        down = start_pos[0] + 1
+        left = start_pos[1] - 1
+        right = start_pos[1] + 1
+
+        neighbours = []
+        if up >= 0 and up <= 2:
+            target_index = up * 3 + start_pos[1]
+            neighbor_grid = swap(target_index, self.grid.copy())
+            neighbor = State(neighbor_grid, self.path_cost, self)
+            neighbours.append(neighbor)
+        if down >= 0 and down <= 2:
+            target_index = down * 3 + start_pos[1]
+            neighbor_grid = swap(target_index, self.grid.copy())
+            neighbor = State(neighbor_grid, self.path_cost, self)
+            neighbours.append(neighbor)
+        if left >= 0 and left <= 2:
+            target_index = start_pos[0] * 3 + left
+            neighbor_grid = swap(target_index, self.grid.copy())
+            neighbor = State(neighbor_grid, self.path_cost, self)
+            neighbours.append(neighbor)
+        if right >= 0 and right <= 2:
+            target_index = start_pos[0] * 3 + right
+            neighbor_grid = swap(target_index, self.grid.copy())
+            neighbor = State(neighbor_grid, self.path_cost, self)
+            neighbours.append(neighbor)
+        return neighbours
+
+        
 class Puzzle:
-    solved_grid = [0, 1, 2,
+    solved_grid = (0, 1, 2,
                    3, 4, 5,
-                   6, 7, 8]
+                   6, 7, 8)
 
     def __init__(self, default_seed: bool):
         self.grid = []
@@ -27,8 +89,7 @@ class Puzzle:
             self.generate_grid()
 
     def __str__(self) -> str:
-        res = "Initial state of the puzzle:\n"
-        return res + f"{self.grid[0]}\n{self.grid[1]}\n{self.grid[2]}\n"
+        return format_grid(self.grid)
     
     
     def generate_grid(self) -> None:
@@ -54,128 +115,134 @@ class Puzzle:
 
 
 class Solver:
-    steps = 0
-    grid_states = []
-    grid = []
-    solved_grid = []
+    steps = -1
 
-    def swap(self, target: int, grid: list) -> list:
+    def __init__(self):
+        self.frontier_set: list[State] = []
+        self.frontier_map: dict[touple[int,...]: State] = {}
+        self.explored_set = set()
+
+    def solve_puzzle(self, puzzle: Puzzle) -> None:
+        print("Initial state of the puzzle:\n")
+        print(puzzle)
+        print("Solving the puzzle...")
+        if puzzle.is_solvable is False:
+            print("Puzzle is unssolvable!")
+            return
+        initial_state = State(puzzle.grid_array, -1, None)
+        goal_state = puzzle.solved_grid
+        self.frontier_set = [initial_state]
+        self.frontier_map = {initial_state.grid_key : initial_state}
+        self.explored_set = set()
+
+        while self.frontier_set:
+            self.steps += 1
+            current_state = self.select_next_state()
+
+            if current_state.grid_key == goal_state:
+                moves = len(current_state.parents)
+                print("Solution found!")
+                print(f"Boards Explored: {self.steps}")
+                print(f"Moves: {moves}" )
+                current_state.parents.append(current_state)
+                for i in range(len(current_state.parents)):
+                    print(f"\nStep {i}:")
+                    print(current_state.parents[i])
+                return
+
+            self.explored_set.add(current_state.grid_key)
+            neighbours = current_state.node_expansion()
+            self.evaluate_neighbours(neighbours)
+
+    def evaluate_neighbours(self, neighbours: list[State]) -> None:
+        frontier = self.frontier_set
+        frontier_map = self.frontier_map
+        for state in neighbours:
+            if state.grid_key in self.explored_set:
+                continue
+            elif state.grid_key not in frontier_map:
+                frontier.append(state)
+                frontier_map[state.grid_key] = state
+            elif state.grid_key in frontier_map:
+                temp = frontier_map[state.grid_key]
+                if state.total_cost < temp.total_cost:
+                    frontier.remove(temp)
+                    frontier_map[state.grid_key] = state
+                    frontier.append(state)
+
+         
+    def select_next_state(self) -> State:
+        frontier = self.frontier_set
+        frontier_map  = self.frontier_map
+        if len(frontier) == 1:
+            res = deepcopy(frontier[0])
+            frontier_map.pop(res.grid_key)
+            frontier.pop(0)
+            return res
+
+        lowest_total_cost = float('inf')
+        lowest_estimated_cost = float('inf')
+        selected_state = None
+        for state in frontier:
+            cur_total_cost = state.total_cost
+            cur_estimated_cost = state.estimated_cost
+            if cur_total_cost < lowest_total_cost:
+                lowest_total_cost = cur_total_cost
+                lowest_estimated_cost = cur_estimated_cost
+                selected_state = state
+            elif cur_total_cost == lowest_total_cost and cur_estimated_cost < lowest_estimated_cost:
+                lowest_total_cost = cur_total_cost
+                lowest_estimated_cost = cur_estimated_cost
+                selected_state = state
+        res = deepcopy(selected_state)
+        frontier_map.pop(res.grid_key)
+        frontier.remove(selected_state)
+        return res
+
+                    
+def heuristic(grid: list) -> int:
+    solved_grid = (0, 1, 2,
+                   3, 4, 5,
+                   6, 7, 8)
+    manhattan_dist = 0
+
+    for row in range(3):
+        for column in range(3):
+            y = solved_grid.index(grid[row * 3 + column])
+            sol_row = y // 3
+            sol_column = y % 3
+            manhattan_dist += (abs(row - sol_row) + abs(column - sol_column))
+    return manhattan_dist
+
+
+def swap(target: int, grid: list) -> list:
         grid[grid.index(0)] = grid[target]
         grid[target] = 0
         return grid
 
-    def heuristic(self, grid: list) -> int:
-        solved_grid = [0, 1, 2,
-                       3, 4, 5,
-                       6, 7, 8]
-        manhattan_dist = 0
-
-        for row in range(3):
-            for column in range(3):
-                y = solved_grid.index(grid[row * 3 + column])
-                sol_row = y // 3
-                sol_column = y % 3
-                manhattan_dist += (abs(row - sol_row) + abs(column - sol_column))
-        return manhattan_dist
-
-    def get_possible_neighbours(self,  grid: list) -> list:
-        start_index = grid.index(0)
-        start_pos = np.array([start_index // 3, start_index % 3])
-        #print(start_pos)
-
-        up = start_pos[0] - 1
-        down = start_pos[0] + 1
-        left = start_pos[1] - 1
-        right = start_pos[1] + 1
-
-        neighbours = []
-        if up >= 0 and up <= 2:
-            target_index = up * 3 + start_pos[1]
-            neighbour = self.swap(target_index, grid.copy())
-            neighbours.append(neighbour)
-        if down >= 0 and down <= 2:
-            target_index = down * 3 + start_pos[1]
-            neighbour = self.swap(target_index, grid.copy())
-            neighbours.append(neighbour)
-        if left >= 0 and left <= 2:
-            target_index = start_pos[0] * 3 + left
-            neighbour = self.swap(target_index, grid.copy())
-            neighbours.append(neighbour)
-        if right >= 0 and right <= 2:
-            target_index = start_pos[0] * 3 + right
-            neighbour = self.swap(target_index, grid.copy())
-            neighbours.append(neighbour)
-        return neighbours
-
-    def solve_puzzle(self, puzzle: Puzzle) -> None:
-        print(puzzle)
-        print(puzzle.is_solvable)
-        print("Solving the puzzle...")
-
-        if puzzle.is_solvable is False:
-            print("Puzzle is unsolvable!")
-            return
-
-        alpha = 0.999
-        for restarts in range(10):
-            cur_grid = deepcopy(puzzle.grid_array)
-            h_cur = self.heuristic(cur_grid)
-            temp = 10.0
-
-            while h_cur > 0 and temp > 0.001:
-                neighbours = self.get_possible_neighbours(cur_grid)
-                selected_neighbour = random.choice(neighbours)
-                dh = h_cur - self.heuristic(selected_neighbour)
-
-                if dh >= 0:
-                    self.steps += 1
-                    self.grid_states.append(selected_neighbour)
-                    cur_grid = selected_neighbour
-                    h_cur = self.heuristic(selected_neighbour)
-                else:
-                    probability = math.exp(dh / temp)
-                    if random.random() < probability:
-                        self.steps += 1
-                        self.grid_states.append(selected_neighbour)
-                        cur_grid = selected_neighbour
-                        h_cur = self.heuristic(selected_neighbour)                        
-                temp *= alpha
-            if h_cur == 0:
-                return
-
-
-        #Finds which neighbours are better that the current pos
-        #best_neighbour = self.neighbour_selection(puzzle.grid_array, good_neighbours)
-        #print (best_neighbour)
-            #self.grid = neighbour_selection(good_neighbours) #Selects the neighbour that has the highest probability to be good
-            #self.grid_states.append(self.grid)
-    
-
-
-        
-        
-        
-
 
 def main() -> int:
-    puzzle1 = Puzzle(False)
-    puzzle2 = Puzzle(True)
-
-    solver = Solver()
-
+    try:
+        if len(sys.argv) == 2:
+            if sys.argv[1] != "default":
+                raise Exception("Invalid Format! Try using: python3 "
+                                "./ex00/puzzle_solver.py (default)")
+            else:
+                puzzle = Puzzle(True)
+                solver = Solver()
+                solver.solve_puzzle(puzzle)
+                return
+        elif len(sys.argv) != 1:
+            raise Exception("Invalid Format! Try using: python3 "
+                            "./ex00/puzzle_solver.py (default)")
     
-    #print(puzzle1)
-    #print(puzzle1.is_solvable)
-    #solver.heuristic(puzzle1.grid_array)
-    #print(puzzle2  )
-    #print(puzzle2.is_solvable)
-    #solver.heuristic(puzzle2.grid_array)
-    solver.solve_puzzle(puzzle2)
-    for state in solver.grid_states:
-        print(state)
-    print(solver.steps)
-
-    return 0
+        puzzle = Puzzle(False)
+        solver = Solver()
+        solver.solve_puzzle(puzzle)
+        return 0
+    except Exception as err:
+        print(err.args[0], file=sys.stderr)
+        return 1
 
 if __name__ == "__main__":
     sys.exit(main())
