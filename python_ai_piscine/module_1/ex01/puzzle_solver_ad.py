@@ -33,10 +33,10 @@ class Puzzle:
 
         if default_seed is True:
             
-            self.grid = [[7, 5, 0],
-                         [6, 4, 1],
-                         [8, 3, 2]]
-            self.grid_array = [7, 5, 0, 6, 4, 1, 8, 3, 2]
+            self.grid = [[0, 7, 2],
+                         [4, 5, 3],
+                         [6, 8, 1]]
+            self.grid_array = [0, 7, 2, 4, 5, 3, 6, 8, 1]
             self.is_default_seed = True
         else:
             self.generate_grid()
@@ -97,7 +97,7 @@ class Solver:
             
             if prev_depth is not None and prev_depth <= cur_depth:
                 continue
-            
+
             visited_depths[cur_state] = cur_depth
 
             if cur_depth >= best_depth:
