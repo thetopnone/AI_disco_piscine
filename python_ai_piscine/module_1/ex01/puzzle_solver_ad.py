@@ -8,15 +8,16 @@ import traceback
 
 
 def format_grid(grid: list) -> str:
+    values = []
     if grid and isinstance(grid[0], list):
-        values = [value for row in grid for value in row]
+        for row in grid:
+            for value in row:
+                values.append(value)
     else:
         values = grid
     rows = []
     for row in range(0, 9, 3):
-        rows.append(
-            f"[{values[row]}, {values[row + 1]}, {values[row + 2]}]"
-        )
+        rows.append(f"[{values[row]}, {values[row + 1]}, {values[row + 2]}]")
     return "\n".join(rows)
         
 class Puzzle:
@@ -96,6 +97,7 @@ class Solver:
             
             if prev_depth is not None and prev_depth <= cur_depth:
                 continue
+            
             visited_depths[cur_state] = cur_depth
 
             if cur_depth >= best_depth:
@@ -126,31 +128,21 @@ class Solver:
 
     def node_expansion(self, cur_state: list) -> tuple:
         start_index = cur_state.index(0)
-        start_pos = np.array([start_index // 3, start_index % 3])
+        start_pos = divmod(start_index, 3)
         result = []
 
-        up = start_pos[0] - 1
-        down = start_pos[0] + 1
-        left = start_pos[1] - 1
-        right = start_pos[1] + 1
-
-        if up >= 0 and up <= 2:
-            target_index = up * 3 + start_pos[1]
-            next_state = tuple(swap(target_index, cur_state.copy()))
-            result.append(next_state)
-        if down >= 0 and down <= 2:
-            target_index = down * 3 + start_pos[1]
-            next_state = tuple(swap(target_index, cur_state.copy()))
-            result.append(next_state)
-        if left >= 0 and left <= 2:
-            target_index = start_pos[0] * 3 + left
-            next_state = tuple(swap(target_index, cur_state.copy()))
-            result.append(next_state)
-        if right >= 0 and right <= 2:
-            target_index = start_pos[0] * 3 + right
-            next_state = tuple(swap(target_index, cur_state.copy()))
-            result.append(next_state)
-        return result  
+        moves = [(1,0),
+                (-1,0),
+                (0, 1),
+                (0, -1)]
+        
+        for move in moves:
+            next_pos = (start_pos[0] + move[0], start_pos[1] + move[1])
+            if next_pos[0] >= 0 and next_pos[0] < 3 and next_pos[1] >= 0 and next_pos[1] < 3:
+                next_index = next_pos[0] * 3 + next_pos[1]
+                next_grid = tuple(swap(next_index, cur_state.copy()))
+                result.append(next_grid)
+        return result
 
 
 def manhattan_distance(state: tuple) -> int:
